@@ -1,9 +1,17 @@
-// src/pages/Dashboard.jsx (Full updated: Fixed getJobMatches param pass as object { user_id }; granular error handling in fetchData; partial loading; better UX for empty states; ensured user.id validation)
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getJobMatches, getApplications, getProfile, autoApplyJobs } from '../api/api'
 import JobCard from '../components/job/JobCard'
-import { UserIcon, BriefcaseIcon, DocumentTextIcon, ChartBarIcon, SparklesIcon, StopIcon } from '@heroicons/react/24/outline'
+import { 
+  UserIcon, 
+  BriefcaseIcon, 
+  DocumentTextIcon, 
+  ChartBarIcon, 
+  SparklesIcon, 
+  StopIcon,
+  ArrowRightIcon,
+  CheckBadgeIcon
+} from '@heroicons/react/24/outline'
 
 function Dashboard() {
   const [matches, setMatches] = useState([])
@@ -17,50 +25,43 @@ function Dashboard() {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
-    setAutoSearchActive(true)  // Start on load
+    if (!token) { navigate('/login'); return; }
 
     const fetchData = async () => {
       try {
         const user = JSON.parse(localStorage.getItem('user') || '{}')
-        if (!user.id) throw new Error('User ID missing in localStorage')
+        if (!user.id) throw new Error('User ID missing')
 
-        // Granular parallel fetches with individual error handling
-        const profilePromise = getProfile().catch(err => { console.error('Profile fetch failed:', err); return null; });
-        const matchesPromise = getJobMatches({ user_id: user.id }).catch(err => { console.error('Matches fetch failed:', err); return []; });
-        const appsPromise = getApplications().catch(err => { console.error('Apps fetch failed:', err); return []; });
-
-        const [profileData, matchesData, appsData] = await Promise.all([profilePromise, matchesPromise, appsPromise]);
+        // We use catch() on individual promises so one 404 doesn't break everything
+        const [profileData, matchesData, appsData] = await Promise.all([
+          getProfile().catch(err => { console.error("Profile 404/Error", err); return null; }),
+          getJobMatches({ user_id: user.id }).catch(err => { console.error("Matches 404/Error", err); return []; }),
+          getApplications().catch(err => { console.error("Apps 404/Error", err); return []; })
+        ]);
 
         setProfile(profileData);
-        setMatches(matchesData.slice(0, 3));
-        setApplications(appsData.slice(0, 5));
+        setMatches(Array.isArray(matchesData) ? matchesData.slice(0, 3) : []);
+        setApplications(Array.isArray(appsData) ? appsData.slice(0, 5) : []);
       } catch (err) {
-        setError('Failed to load dashboard data. Please refresh.');
-        console.error('Dashboard fetch error:', err);
+        setError('Dashboard sync failed. Please check your connection.');
       } finally {
         setLoading(false);
       }
     }
-
     fetchData()
   }, [navigate])
 
+  // --- Automation Logic ---
   const handleAutoApply = async () => {
-    if (!confirm('Auto-apply to up to 50 matching jobs using your profile/resume data?')) return
+    if (!confirm('Initiate AI Bulk-Apply for 50 matching jobs?')) return
     setAutoApplying(true)
     try {
-      const result = await autoApplyJobs(50)  // 50 jobs
-      alert(`Success! Applied to ${result.applied.length} new jobs. Check Applications page.`)
+      const result = await autoApplyJobs(50)
+      alert(`Success! Applied to ${result.applied?.length || 0} new jobs.`)
       const appsData = await getApplications()
       setApplications(appsData.slice(0, 5))
     } catch (err) {
-      alert('Auto-apply failed. Please check your profile/resume and try again.')
-      console.error(err)
+      alert('Auto-apply failed. Check your API connection.')
     } finally {
       setAutoApplying(false)
     }
@@ -68,215 +69,133 @@ function Dashboard() {
 
   const handleStartAuto = () => {
     setAutoSearchActive(true)
-    alert('Auto-search started! It will run every 30 min, applying up to 50 jobs/day.')
+    alert('AI Engine restarted. Scanning every 30 minutes.')
   }
 
-  const handleStopAuto = async () => {
+  const handleStopAuto = () => {
     setAutoSearchActive(false)
-    alert('Auto-search stopped.')
+    alert('AI Engine paused.')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
-  if (error && !profile && matches.length === 0 && applications.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">{error}</h2>
-          <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-indigo-600 border-opacity-20 border-t-indigo-600"></div>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100">
-      {/* Hero Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-12">
+      <div className="max-w-7xl mx-auto px-6 pt-10">
+        
+        {/* --- Hero Section --- */}
+        <header className="mb-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Welcome back, {profile?.full_name || 'User'}!
-              </h1>
-              <p className="mt-1 text-lg text-gray-600">
-                Auto-search is {autoSearchActive ? 'running (50 jobs/day)' : 'stopped'}. Here's your dashboard.
+              <h2 className="text-4xl font-black tracking-tight text-slate-900 leading-tight">
+                Hey, {profile?.full_name?.split(' ')[0] || 'User'}! 👋
+              </h2>
+              <p className="text-slate-500 mt-2 flex items-center gap-2 font-medium text-lg">
+                <span className={`h-2.5 w-2.5 rounded-full ${autoSearchActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                {autoSearchActive ? 'AI Search Engine is optimized and running' : 'System standby'}
               </p>
             </div>
-            <div className="mt-4 lg:mt-0">
-              <button onClick={() => navigate('/profile')} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <UserIcon className="h-5 w-5 mr-2" />
-                View Profile
+            <div className="flex gap-3">
+              <button 
+                onClick={handleAutoApply}
+                disabled={autoApplying}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 active:scale-95"
+              >
+                <SparklesIcon className="h-5 w-5" />
+                {autoApplying ? 'Applying...' : 'Instant Auto-Apply (50)'}
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* --- Stats Grid --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          {[
+            { label: 'Smart Matches', val: matches.length, icon: ChartBarIcon, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Total Apps', val: applications.length, icon: BriefcaseIcon, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            { label: 'Exp. Level', val: `${profile?.experience_years || 0} Yrs`, icon: CheckBadgeIcon, color: 'text-emerald-600', bg: 'bg-emerald-50' }
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+              <div className={`${stat.bg} ${stat.color} w-12 h-12 rounded-xl flex items-center justify-center mb-6`}>
+                <stat.icon className="h-6 w-6" />
+              </div>
+              <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{stat.label}</p>
+              <p className="text-3xl font-black mt-1 text-slate-800">{stat.val}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* --- Main Grid --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          
+          {/* Timeline Pipeline */}
+          <div className="lg:col-span-1">
+             <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <DocumentTextIcon className="h-5 w-5 text-slate-400" /> Pipeline
+             </h3>
+             <div className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-8">
+                {applications.length > 0 ? applications.map((app) => (
+                  <div key={app.id} className="relative pl-6 border-l-2 border-indigo-50 hover:border-indigo-500 transition-all group">
+                    <div className="absolute -left-[7px] top-1 h-3 w-3 rounded-full bg-white border-2 border-indigo-500 group-hover:scale-125 transition-transform"></div>
+                    <p className="font-bold text-sm text-slate-800">{app.job_title}</p>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-[10px] font-bold uppercase py-1 px-2 bg-slate-100 rounded text-slate-500">{app.status}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{new Date(app.applied_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                )) : <p className="text-center text-slate-400 py-4 text-sm font-medium">No activity yet</p>}
+             </div>
+          </div>
+
+          {/* Top Matches Showcase */}
+          <div className="lg:col-span-2">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold">Recommended for You</h3>
+              <button onClick={() => navigate('/jobs')} className="text-indigo-600 text-sm font-bold hover:underline">See Discovery</button>
+            </div>
+            <div className="space-y-4">
+              {matches.length > 0 ? matches.map((job) => (
+                <JobCard key={job.id} job={job} />
+              )) : (
+                <div className="bg-white rounded-[2rem] p-16 text-center border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 font-medium">Scan complete. No direct matches found right now.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* --- Modern Automation Control --- */}
+        <div className="mt-12 bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-10 opacity-10">
+            <SparklesIcon className="h-40 w-40" />
+          </div>
+          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div>
+              <h3 className="text-2xl font-black mb-2 italic">Automation Control Panel</h3>
+              <p className="text-slate-400 max-w-sm font-medium">Toggle the AI search engine to browse and apply for jobs while you sleep.</p>
+            </div>
+            <div className="flex gap-4">
+              <button 
+                onClick={handleStartAuto} 
+                className="bg-emerald-500 hover:bg-emerald-600 px-8 py-4 rounded-2xl font-black transition-all active:scale-95"
+              >
+                Resume Engine
+              </button>
+              <button 
+                onClick={handleStopAuto} 
+                className="bg-white/10 hover:bg-white/20 px-8 py-4 rounded-2xl font-bold transition-all"
+              >
+                Pause AI
               </button>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <ChartBarIcon className="h-6 w-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Matches</p>
-                <p className="text-2xl font-bold text-gray-900">{matches.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <BriefcaseIcon className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Applications</p>
-                <p className="text-2xl font-bold text-gray-900">{applications.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <DocumentTextIcon className="h-6 w-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Experience</p>
-                <p className="text-2xl font-bold text-gray-900">{profile?.experience_years || 0} yrs</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Matches */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-            <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <h2 className="text-xl font-bold flex items-center">
-                <BriefcaseIcon className="h-6 w-6 mr-2" />
-                Top Job Matches
-              </h2>
-              <p className="text-blue-100 mt-1">Based on your skills and experience</p>
-            </div>
-            <div className="p-6">
-              {matches.length > 0 ? (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {matches.map((job) => <JobCard key={job.id} job={job} onApply={() => {}} />)}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <BriefcaseIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No matches yet. Update your skills!</p>
-                  <button onClick={() => navigate('/profile')} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                    Add Skills
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Applications */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-            <div className="p-6 bg-gradient-to-r from-green-600 to-emerald-600 text-white">
-              <h2 className="text-xl font-bold flex items-center">
-                <DocumentTextIcon className="h-6 w-6 mr-2" />
-                Recent Applications
-              </h2>
-              <p className="text-green-100 mt-1">Track your progress</p>
-            </div>
-            <div className="p-6">
-              {applications.length > 0 ? (
-                <div className="space-y-3">
-                  {applications.map((app) => (
-                    <div key={app.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">{app.job_title || 'Job Title'}</p>
-                        <p className="text-sm text-gray-500">{new Date(app.applied_at).toLocaleDateString()}</p>
-                      </div>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        app.status === 'offer' ? 'bg-green-100 text-green-800' :
-                        app.status === 'interview' ? 'bg-yellow-100 text-yellow-800' :
-                        app.status === 'applied' ? 'bg-blue-100 text-blue-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {app.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No applications yet. Start applying!</p>
-                  <button onClick={() => navigate('/jobs')} className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
-                    Apply Now
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <button onClick={() => navigate('/jobs')} className="flex items-center justify-center p-4 bg-blue-50 border-2 border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
-              <BriefcaseIcon className="h-6 w-6 text-blue-600 mr-2" />
-              Browse Jobs
-            </button>
-            <button onClick={() => navigate('/applications')} className="flex items-center justify-center p-4 bg-green-50 border-2 border-green-200 rounded-lg hover:bg-green-100 transition-colors">
-              <DocumentTextIcon className="h-6 w-6 text-green-600 mr-2" />
-              View All Applications
-            </button>
-            <button onClick={() => navigate('/profile')} className="flex items-center justify-center p-4 bg-purple-50 border-2 border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
-              <UserIcon className="h-6 w-6 text-purple-600 mr-2" />
-              Update Profile
-            </button>
-            <button
-              onClick={handleAutoApply}
-              disabled={autoApplying}
-              className="flex items-center justify-center p-4 bg-indigo-50 border-2 border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
-            >
-              <SparklesIcon className="h-6 w-6 text-indigo-600 mr-2" />
-              {autoApplying ? 'Applying to 50...' : 'Auto-Apply to 50 Matches'}
-            </button>
-          </div>
-          {/* Auto-Search Controls */}
-          <div className="flex space-x-4">
-            <button
-              onClick={handleStartAuto}
-              disabled={autoSearchActive}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <SparklesIcon className="h-5 w-5 inline mr-2" />
-              Start Auto-Search (50/day)
-            </button>
-            <button
-              onClick={handleStopAuto}
-              disabled={!autoSearchActive}
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <StopIcon className="h-5 w-5 inline mr-2" />
-              Stop & Logout
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-gray-600">Auto-search runs every 30 min when active, applying up to 50 jobs/day with your resume/profile data.</p>
-        </div>
       </div>
     </div>
   )

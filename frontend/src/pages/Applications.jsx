@@ -1,8 +1,14 @@
-// src/pages/Applications.jsx (Full updated code: FIXED setApplications to handle { applications: [] } response structure from backend; added safe .map check with Array.isArray; fallback to empty [] if data.applications undefined; improved error handling to show backend message if available; consistent with paginated response; no crash on .map)
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getApplications, updateStatus } from '../api/api'
-import { DocumentTextIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
+import { 
+  DocumentTextIcon, 
+  ArrowLeftIcon, 
+  FunnelIcon, 
+  EllipsisVerticalIcon,
+  CalendarDaysIcon,
+  BuildingOfficeIcon
+} from '@heroicons/react/24/outline'
 
 function Applications() {
   const [applications, setApplications] = useState([])
@@ -12,172 +18,172 @@ function Applications() {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
+    if (!token) { navigate('/login'); return; }
 
     const fetchApplications = async () => {
       try {
         const data = await getApplications()
-        // FIXED: Handle { applications: [] } structure; fallback to empty array
         const appsArray = Array.isArray(data) ? data : (data.applications || [])
         setApplications(appsArray)
       } catch (err) {
-        // Enhanced: Show backend message if available
-        const errMsg = err.response?.data?.message || 'Failed to load applications. Please refresh.'
-        setError(errMsg)
-        console.error('Fetch applications error:', err)
-        setApplications([])  // Ensure empty array on error
+        setError(err.response?.data?.message || 'Sync failed. Please refresh.')
+        setApplications([])
       } finally {
         setLoading(false)
       }
     }
-
     fetchApplications()
   }, [navigate])
 
   const handleStatusUpdate = async (appId, newStatus) => {
     try {
       await updateStatus(appId, newStatus)
-      setApplications(prev => 
-        Array.isArray(prev) ? prev.map(app => 
-          app.id === appId ? { ...app, status: newStatus } : app
-        ) : []
-      )
+      setApplications(prev => prev.map(app => 
+        app.id === appId ? { ...app, status: newStatus } : app
+      ))
     } catch (err) {
       alert('Failed to update status')
-      console.error(err)
     }
   }
 
-  const getStatusBadge = (status) => {
-    const colors = {
-      applied: 'bg-blue-100 text-blue-800',
-      rejected: 'bg-red-100 text-red-800',
-      interview: 'bg-yellow-100 text-yellow-800',
-      offer: 'bg-green-100 text-green-800'
+  const getStatusStyles = (status) => {
+    const styles = {
+      applied: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+      rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
+      interview: 'bg-amber-50 text-amber-700 ring-amber-200',
+      offer: 'bg-emerald-50 text-emerald-700 ring-emerald-200'
     }
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    )
+    return styles[status] || 'bg-slate-50 text-slate-700 ring-slate-200'
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4 animate-pulse" />
-          <p className="text-gray-600">Loading your applications...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 border-opacity-20 border-t-indigo-600"></div>
+        <p className="text-slate-400 font-bold text-sm tracking-widest uppercase">Fetching Pipeline</p>
       </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">{error}</h2>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100">
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <DocumentTextIcon className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-3xl font-bold text-gray-900">My Applications</h1>
-            </div>
-            <button
-              onClick={() => navigate('/jobs')}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-20">
+      <div className="max-w-7xl mx-auto px-6 pt-10">
+        
+        {/* --- Header Section --- */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+          <div>
+            <button 
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 font-bold text-sm transition-colors mb-4 group"
             >
-              <ArrowUturnLeftIcon className="h-5 w-5 mr-2" />
-              Browse Jobs
+              <ArrowLeftIcon className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+              Back to Overview
+            </button>
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">Application Pipeline</h1>
+            <p className="text-slate-500 mt-2 font-medium">
+              Managing <span className="text-indigo-600 font-bold">{applications.length}</span> active opportunities
+            </p>
+          </div>
+          
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-all">
+              <FunnelIcon className="h-5 w-5" />
+              Filter
+            </button>
+            <button 
+              onClick={() => navigate('/jobs')}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
+            >
+              Discover More Jobs
             </button>
           </div>
-          <p className="mt-2 text-lg text-gray-600">Track and manage your job applications here.</p>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {(!Array.isArray(applications) || applications.length === 0) ? (
-          <div className="text-center py-12 bg-white rounded-xl shadow-md border border-gray-100">
-            <DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Applications Yet</h3>
-            <p className="text-gray-600 mb-6">Get started by applying to some jobs!</p>
-            <button
+        {/* --- Content Area --- */}
+        {!applications || applications.length === 0 ? (
+          <div className="bg-white rounded-[3rem] p-20 text-center border border-slate-100 shadow-sm">
+            <div className="bg-slate-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6">
+              <DocumentTextIcon className="h-10 w-10 text-slate-300" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-800">Your pipeline is empty</h3>
+            <p className="text-slate-400 mt-2 mb-8 max-w-xs mx-auto">Start applying to jobs to track your interview stages and offers here.</p>
+            <button 
               onClick={() => navigate('/jobs')}
-              className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold"
+              className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-all"
             >
-              Find Jobs Now
+              Search Jobs Now
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Title</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {applications.map((app) => (
-                    <tr key={app.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {app.job_title || 'Untitled Job'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {app.company_name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(app.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(app.applied_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        {app.status === 'applied' && (
-                          <select
-                            onChange={(e) => handleStatusUpdate(app.id, e.target.value)}
-                            value={app.status}
-                            className="text-xs px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="applied">Applied</option>
-                            <option value="interview">Interview</option>
-                            <option value="offer">Offer</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
-                        )}
-                        {app.status !== 'applied' && getStatusBadge(app.status)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-5 bg-slate-50/50 border-b border-slate-100 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+              <div className="col-span-5">Position & Company</div>
+              <div className="col-span-2">Current Status</div>
+              <div className="col-span-3">Date Applied</div>
+              <div className="col-span-2 text-right">Operations</div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-              <p className="text-sm text-gray-600">
-                Showing {applications.length} of {applications.length} {applications.length === 1 ? 'application' : 'applications'}.
-              </p>
+
+            <div className="divide-y divide-slate-50">
+              {applications.map((app) => (
+                <div key={app.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 px-8 py-6 items-center hover:bg-slate-50/30 transition-colors group">
+                  
+                  {/* Job Info */}
+                  <div className="col-span-5 flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <BuildingOfficeIcon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight">
+                        {app.job_title || 'Untitled Role'}
+                      </h4>
+                      <p className="text-sm text-slate-400 font-medium">{app.company_name || 'Confidential'}</p>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="col-span-2">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-black uppercase ring-1 ring-inset ${getStatusStyles(app.status)}`}>
+                      {app.status}
+                    </span>
+                  </div>
+
+                  {/* Date */}
+                  <div className="col-span-3 flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                    <CalendarDaysIcon className="h-4 w-4 text-slate-300" />
+                    {new Date(app.applied_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </div>
+
+                  {/* Action Dropdown/Select */}
+                  <div className="col-span-2 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      <select
+                        onChange={(e) => handleStatusUpdate(app.id, e.target.value)}
+                        value={app.status}
+                        className="bg-transparent text-xs font-bold text-slate-400 hover:text-indigo-600 cursor-pointer outline-none border-none focus:ring-0"
+                      >
+                        <option value="applied">Update Status</option>
+                        <option value="interview">Interviewing</option>
+                        <option value="offer">Received Offer</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                      <button className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-slate-200">
+                        <EllipsisVerticalIcon className="h-5 w-5 text-slate-400" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="px-8 py-5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+               <p className="text-xs font-bold text-slate-400">
+                PAGE 1 OF 1 <span className="mx-2 opacity-30">|</span> {applications.length} RESULTS
+               </p>
+               <div className="flex gap-2">
+                  <button disabled className="px-3 py-1 text-[10px] font-black uppercase text-slate-300 bg-white border border-slate-200 rounded-lg">Prev</button>
+                  <button disabled className="px-3 py-1 text-[10px] font-black uppercase text-slate-300 bg-white border border-slate-200 rounded-lg">Next</button>
+               </div>
             </div>
           </div>
         )}
